@@ -1,0 +1,37 @@
+{
+  "build": {
+    "distDir": "../dist",
+    "devPath": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "package": {
+    "productName": "cheonan-sujil-inventory",
+    "version": "3.5.0"
+  },
+  "tauri": {
+    "bundle": {
+      "active": true,
+      "targets": ["deb", "rpm", "msi"],
+      "identifier": "com.cheonan.inventory",
+      "icon": [
+        "icons/icon.png"
+      ]
+    },
+    "allowlist": {
+      "all": false
+    },
+    "windows": [
+      {
+        "title": "천안 수질 TMS 재고관리",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}
