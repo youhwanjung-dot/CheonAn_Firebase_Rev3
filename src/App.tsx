@@ -15,6 +15,7 @@ import {
     Box,
     BookOpen
 } from 'lucide-react';
+import { fs, path } from '@tauri-apps/api';
 
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -39,7 +40,7 @@ import { InventoryItem, InventoryTransaction, User, ViewState } from './types';
 import { APP_VERSION } from './constants';
 import { ActionLogger } from './utils/logger';
 
-const API_URL = '/api/data';
+// const API_URL = '/api/data'; // No longer needed
 
 const App = () => {
     const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -68,48 +69,67 @@ const App = () => {
     const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
     const [showManual, setShowManual] = useState(false);
 
-    // Data Loading from Server
+    // Data Loading Logic for Tauri
     useEffect(() => {
-        const fetchData = async () => {
+        const DATA_FILE_NAME = 'database.json';
+
+        const initializeData = async () => {
             try {
-                const response = await fetch(API_URL);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                const appDataDirPath = await path.appDataDir();
+                if (!(await fs.exists(appDataDirPath))) {
+                    await fs.createDir(appDataDirPath);
                 }
-                const data = await response.json();
+                const filePath = await path.join(appDataDirPath, DATA_FILE_NAME);
+
+                let fileContent;
+                if (await fs.exists(filePath)) {
+                    // If file exists in user data folder, read it
+                    fileContent = await fs.readTextFile(filePath);
+                } else {
+                    // If not (first run), read initial data from bundled resource
+                    const resourcePath = await path.resolveResource(DATA_FILE_NAME);
+                    fileContent = await fs.readTextFile(resourcePath);
+                    // And save it to the user data folder for future use
+                    await fs.writeFile({ path: filePath, contents: fileContent });
+                }
+
+                const data = JSON.parse(fileContent);
                 setInventory(sortInventory(data.inventory || []));
                 setTransactions(data.transactions || []);
                 setUsers(data.users || []);
+
             } catch (error) {
-                console.error("Failed to fetch initial data:", error);
+                console.error("Tauri: Failed to initialize data:", error);
                 // You might want to show an error message to the user here
             } finally {
                 setIsDataLoaded(true);
             }
         };
-        fetchData();
+
+        initializeData();
     }, []);
 
-    // Data Saving to Server (with debounce)
+    // Data Saving Logic for Tauri (with debounce)
     useEffect(() => {
         if (!isDataLoaded) return;
 
         const handler = setTimeout(async () => {
             try {
+                const appDataDirPath = await path.appDataDir();
+                const filePath = await path.join(appDataDirPath, 'database.json');
+                
                 const payload = {
                     inventory,
                     transactions,
                     users
                 };
-                await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload),
+
+                await fs.writeFile({
+                    path: filePath,
+                    contents: JSON.stringify(payload, null, 2) // Pretty-print for readability
                 });
             } catch (error) {
-                console.error("Failed to save data:", error);
+                console.error("Tauri: Failed to save data:", error);
                 // You might want to show an error message to the user here
             }
         }, 1000); // 1-second debounce
@@ -118,6 +138,7 @@ const App = () => {
             clearTimeout(handler);
         };
     }, [inventory, transactions, users, isDataLoaded]);
+
 
     // Theme persistence
     useEffect(() => {
@@ -166,10 +187,24 @@ const App = () => {
         setShowStockForm(false);
     };
 
-    const executeReset = () => {
-        // This will now be saved to the backend via the useEffect hook
-        setInventory([]);
-        setTransactions([]);
+    const executeReset = async () => {
+        try {
+            // Load initial data from resources
+            const resourcePath = await path.resolveResource('database.json');
+            const fileContent = await fs.readTextFile(resourcePath);
+            const data = JSON.parse(fileContent);
+            
+            // Reset state
+            setInventory(sortInventory(data.inventory || []));
+            setTransactions(data.transactions || []);
+            // Users might not be in the initial file, so reset to default if needed
+            setUsers(data.users || []);
+
+            // The useEffect for saving will automatically persist this reset state
+            
+        } catch (error) {
+            console.error("Tauri: Failed to reset database:", error);
+        }
         setShowResetConfirm(false);
         ActionLogger.log('System Database Reset');
     };
@@ -352,7 +387,7 @@ const App = () => {
             </Suspense>
 
             {showLogoutConfirm && <ConfirmationModal title="로그아웃 확인" message="로그아웃 하시겠습니까?" confirmLabel="로그아웃" onConfirm={handleLogout} onCancel={() => setShowLogoutConfirm(false)} />}
-            {showResetConfirm && <ConfirmationModal title="DB 초기화" message="모든 데이터(재고, 수불, 사용자)가 서버에서 영구적으로 삭제됩니다. 계속하시겠습니까?" confirmLabel="초기화" isDangerous onConfirm={executeReset} onCancel={() => setShowResetConfirm(false)} />}
+            {showResetConfirm && <ConfirmationModal title="DB 초기화" message="모든 데이터(재고, 수불, 사용자)가 영구적으로 삭제됩니다. 계속하시겠습니까?" confirmLabel="초기화" isDangerous onConfirm={executeReset} onCancel={() => setShowResetConfirm(false)} />}
             {showClearHistoryConfirm && transactionItem && <ConfirmationModal
                 title="이력 전체 삭제"
                 message={`'${transactionItem.name}' 품목의 모든 입출고 이력을 삭제합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`}
@@ -362,7 +397,7 @@ const App = () => {
                 onCancel={() => setShowClearHistoryConfirm(false)}
             />}
             {showManual && <ManualModal onClose={() => setShowManual(false)} />}
-            <div className="fixed bottom-2 right-2 text-[10px] text-slate-300 pointer-events-none z-50">v{APP_VERSION} (Server)</div>
+            <div className="fixed bottom-2 right-2 text-[10px] text-slate-300 pointer-events-none z-50">v{APP_VERSION} (Desktop)</div>
         </div>
     );
 };
