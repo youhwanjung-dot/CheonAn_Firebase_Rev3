@@ -62,6 +62,19 @@
     - **`src-tauri` 처리:** `git add src-tauri` 명령으로 폴더 전체를 추가한 뒤, `git reset src-tauri/target` 명령을 사용하여 빌드 결과물인 `target` 폴더만 스테이징에서 제외합니다. 이는 `icon.png`와 같은 필수 자원은 포함시키면서, 불필요한 빌드 캐시는 제외하는 가장 정확한 방법입니다.
     - **Tauri 설정 파일:** `src-tauri/tauri.conf.json`이 반드시 포함되었는지 재차 확인해야 합니다. 이 파일 누락은 빌드 실패의 직접적인 원인이 됩니다.
 
+### 3.5. 아이콘 관리 (Icon Management)
+
+*   **단일 원본 아이콘 (Single Source of Truth):**
+    *   애플리케이션의 모든 아이콘은 **`src-tauri/icon.png`** (또는 `.svg` 파일이 존재할 경우 `.svg` 파일)를 단일 원본으로 합니다.
+    *   로고 또는 아이콘 변경이 필요할 경우, 이 원본 파일만 수정하는 것을 원칙으로 합니다.
+*   **개발 환경 (Firebase Studio / Linux):**
+    *   `npm run tauri dev` 또는 `npm run tauri build` 실행 시, Tauri는 원본 아이콘을 사용하여 다양한 크기의 Linux용 `.png` 아이콘과 Windows용 `.ico` 파일을 자동으로 생성합니다.
+    *   이 과정에서 Linux 플랫폼 관련 아이콘 생성 오류가 발생할 수 있으나, 최종 목표는 Windows이므로 이러한 오류는 무시합니다.
+*   **배포 및 최종 빌드 환경 (User PC / Windows):**
+    *   최종 `.msi` 설치 파일 생성은 사용자의 Windows PC에서 `install.bat` 스크립트를 통해 이루어집니다.
+    *   `install.bat` 스크립트는 `npx tauri build` 명령을 실행하며, 이 때 Tauri는 `src-tauri/icon.png` 원본을 사용하여 Windows 환경에 필요한 모든 아이콘 (`.ico` 및 다양한 크기의 `.png` 파일)을 정상적으로 생성하고 최종 실행 파일과 설치 파일에 포함시킵니다.
+
+
 ## 4. 필수 패키지 및 라이브러리 버전 (Dependencies & Versions)
 
 ### 4.1. Tauri 데스크톱 앱 빌드 (Tauri Desktop App Build)
@@ -119,3 +132,15 @@
 - **Backend:** `better-sqlite3`, `pkg`
 - **Frontend:** `@tanstack/react-query`
 - **Dev-Ops:** `concurrently`, `nodemon`
+
+---
+
+### **향후 계획: v3.4.3 - 최종 빌드 패키지 완성**
+
+- **목표:** Windows 설치 파일(`.msi`)에 애플리케이션 실행에 필수적인 `database.json` 파일을 포함시켜, 설치 즉시 정상적으로 작동하는 완전한 배포 패키지를 만든다.
+- **문제 인식:** 현재 `install.bat`을 통해 생성된 설치 파일은 `database.json`을 포함하지 않아, 설치 후 애플리케이션이 초기 데이터를 읽어오지 못하는 문제가 있다.
+- **실행 계획:**
+    1.  **`tauri.conf.json` 수정:** `tauri.bundle` 설정에 `resources` 배열을 추가한다.
+    2.  `resources` 배열에 `database.json` 파일의 경로(`"../database.json"`)를 명시하여, Tauri 빌드 시 이 파일을 최종 패키지에 포함하도록 지시한다.
+    3.  수정된 `tauri.conf.json`을 GitHub 저장소에 업로드한다.
+    4.  고객사 PC에서 `install.bat`을 다시 실행하여, `database.json`이 올바르게 포함된 최종 설치 파일을 생성하고 정상 작동 여부를 검증한다.
