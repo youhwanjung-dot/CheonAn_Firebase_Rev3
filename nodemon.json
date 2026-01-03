@@ -1,0 +1,5 @@
+{
+  "watch": ["server.ts", "src/**/*.ts"],
+  "ext": "ts,json",
+  "exec": "node --import=ts-node/register server.ts"
+}

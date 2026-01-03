@@ -26,7 +26,11 @@
       ]
     },
     "allowlist": {
-      "all": false
+      "all": false,
+      "fs": {
+        "all": true,
+        "scope": ["$RESOURCE/*"]
+      }
     },
     "windows": [
       {

@@ -15,7 +15,8 @@ import {
     Box,
     BookOpen
 } from 'lucide-react';
-import { fs, path } from '@tauri-apps/api';
+// [Web Preview Fix] Temporarily disable Tauri API for web development
+// import { fs, path } from '@tauri-apps/api';
 
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -39,8 +40,6 @@ const MonthlyReportModal = React.lazy(() => import('./components/MonthlyReportMo
 import { InventoryItem, InventoryTransaction, User, ViewState } from './types';
 import { APP_VERSION } from './constants';
 import { ActionLogger } from './utils/logger';
-
-// const API_URL = '/api/data'; // No longer needed
 
 const App = () => {
     const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -69,12 +68,34 @@ const App = () => {
     const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
     const [showManual, setShowManual] = useState(false);
 
-    // Data Loading Logic for Tauri
+    // [Web Preview Fix] Re-enabled fetch for web development preview
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                // In web preview, data is fetched from the /public folder
+                const response = await fetch('/database.json'); 
+                const data = await response.json();
+                setInventory(sortInventory(data.inventory || []));
+                setTransactions(data.transactions || []);
+                setUsers(data.users || []);
+            } catch (error) {
+                console.error("Web Preview: Failed to fetch initial data:", error);
+            } finally {
+                setIsDataLoaded(true);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    // [Web Preview Fix] Temporarily disabled Tauri data loading logic
+    /*
     useEffect(() => {
         const DATA_FILE_NAME = 'database.json';
 
         const initializeData = async () => {
             try {
+                // This part only runs in a real Tauri app, not in a web browser
                 const appDataDirPath = await path.appDataDir();
                 if (!(await fs.exists(appDataDirPath))) {
                     await fs.createDir(appDataDirPath);
@@ -83,13 +104,10 @@ const App = () => {
 
                 let fileContent;
                 if (await fs.exists(filePath)) {
-                    // If file exists in user data folder, read it
                     fileContent = await fs.readTextFile(filePath);
                 } else {
-                    // If not (first run), read initial data from bundled resource
                     const resourcePath = await path.resolveResource(DATA_FILE_NAME);
                     fileContent = await fs.readTextFile(resourcePath);
-                    // And save it to the user data folder for future use
                     await fs.writeFile({ path: filePath, contents: fileContent });
                 }
 
@@ -100,18 +118,25 @@ const App = () => {
 
             } catch (error) {
                 console.error("Tauri: Failed to initialize data:", error);
-                // You might want to show an error message to the user here
             } finally {
                 setIsDataLoaded(true);
             }
         };
-
-        initializeData();
+        // Check if running in Tauri context before trying to use Tauri APIs
+        if (window.__TAURI__) {
+          initializeData();
+        } else {
+          console.warn('Not in Tauri context. Skipping native data initialization.');
+          // As a fallback for non-Tauri env, you could use the fetch method here too
+          setIsDataLoaded(true); // Still need to unblock the UI
+        }
     }, []);
+    */
 
-    // Data Saving Logic for Tauri (with debounce)
+    // [Web Preview Fix] Temporarily disabled Tauri data saving logic
+    /*
     useEffect(() => {
-        if (!isDataLoaded) return;
+        if (!isDataLoaded || !window.__TAURI__) return;
 
         const handler = setTimeout(async () => {
             try {
@@ -126,19 +151,18 @@ const App = () => {
 
                 await fs.writeFile({
                     path: filePath,
-                    contents: JSON.stringify(payload, null, 2) // Pretty-print for readability
+                    contents: JSON.stringify(payload, null, 2)
                 });
             } catch (error) {
                 console.error("Tauri: Failed to save data:", error);
-                // You might want to show an error message to the user here
             }
-        }, 1000); // 1-second debounce
+        }, 1000);
 
         return () => {
             clearTimeout(handler);
         };
     }, [inventory, transactions, users, isDataLoaded]);
-
+    */
 
     // Theme persistence
     useEffect(() => {
@@ -188,25 +212,19 @@ const App = () => {
     };
 
     const executeReset = async () => {
+        // This function needs to be adapted. In web, we can't write to the file system.
+        // We will just refetch the original data for a 'soft reset'
         try {
-            // Load initial data from resources
-            const resourcePath = await path.resolveResource('database.json');
-            const fileContent = await fs.readTextFile(resourcePath);
-            const data = JSON.parse(fileContent);
-            
-            // Reset state
-            setInventory(sortInventory(data.inventory || []));
-            setTransactions(data.transactions || []);
-            // Users might not be in the initial file, so reset to default if needed
-            setUsers(data.users || []);
-
-            // The useEffect for saving will automatically persist this reset state
-            
+             const response = await fetch('/database.json');
+             const data = await response.json();
+             setInventory(sortInventory(data.inventory || []));
+             setTransactions(data.transactions || []);
+             setUsers(data.users || []);
         } catch (error) {
-            console.error("Tauri: Failed to reset database:", error);
+            console.error("Web Preview: Failed to reset database:", error);
         }
         setShowResetConfirm(false);
-        ActionLogger.log('System Database Reset');
+        ActionLogger.log('System Database Reset (Web Preview)');
     };
 
     const handleTransactionSave = (tx: Omit<InventoryTransaction, 'id' | 'currentStockSnapshot'>) => {
@@ -258,7 +276,6 @@ const App = () => {
         if (!transactionItemId) return;
 
         setTransactions(prev => prev.filter(tx => tx.itemId !== transactionItemId));
-        // This will be saved automatically
 
         setShowClearHistoryConfirm(false);
         setShowTransactionModal(false);
@@ -288,7 +305,6 @@ const App = () => {
         { id: 'HISTORY_IMPORT', label: '수불부 등록', icon: History },
     ];
 
-    // App UI...
     return (
         <div className="flex h-screen bg-slate-100 dark:bg-slate-950 transition-colors overflow-hidden font-sans">
             <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 flex flex-col z-20 shadow-xl`}>
@@ -359,7 +375,7 @@ const App = () => {
                         {currentView === 'DASHBOARD' && <Dashboard items={sortedInventory} isDarkMode={isDarkMode} />}
                         {currentView === 'INVENTORY' && <InventoryList items={sortedInventory} user={user} onAdd={handleAddItem} onEdit={handleEditItem} onDelete={handleDeleteItem} onReset={() => setShowResetConfirm(true)} onTransaction={(item) => { setTransactionItemId(item.id); setShowTransactionModal(true); }} onOpenMonthlyReport={() => setShowMonthlyReport(true)} onOpenDBManager={() => setShowDBManager(true)} />}
                         {currentView === 'ANALYSIS' && <AIAdvisor items={sortedInventory} transactions={transactions} />}
-                        {currentView === 'IMPORT' && <ExcelImport onImport={(items) => { setInventory(prev => sortInventory([...prev, ...items])); setCurrentView('INVENTORY'); }} onCancel={() => setCurrentView('INVENTORY')} currentInventory={inventory} />}
+                        {currentVew === 'IMPORT' && <ExcelImport onImport={(items) => { setInventory(prev => sortInventory([...prev, ...items])); setCurrentView('INVENTORY'); }} onCancel={() => setCurrentView('INVENTORY')} currentInventory={inventory} />}
                         {currentView === 'HISTORY_IMPORT' && <TransactionHistoryImport onImport={(txs) => { setTransactions(prev => [...txs, ...prev]); setCurrentView('INVENTORY'); }} onCancel={() => setCurrentView('INVENTORY')} inventory={inventory} />}
                     </Suspense>
                 </div>
@@ -397,7 +413,7 @@ const App = () => {
                 onCancel={() => setShowClearHistoryConfirm(false)}
             />}
             {showManual && <ManualModal onClose={() => setShowManual(false)} />}
-            <div className="fixed bottom-2 right-2 text-[10px] text-slate-300 pointer-events-none z-50">v{APP_VERSION} (Desktop)</div>
+            <div className="fixed bottom-2 right-2 text-[10px] text-slate-300 pointer-events-none z-50">v{APP_VERSION} (Web Preview)</div>
         </div>
     );
 };
