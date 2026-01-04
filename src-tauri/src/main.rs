@@ -1,7 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs::{self, copy};
-use std::path::PathBuf;
 use tauri::Manager;
 
 fn main() {
@@ -28,16 +27,11 @@ fn main() {
             }
 
             if !target_db_path.exists() {
-                let resource_path_option = handle
-                    .path_resolver()
-                    .resolve_resource("../public/database.json") // Adjusted path to be relative to src-tauri
-                    .expect("Failed to resolve resource. Check if '../public/database.json' is in tauri.conf.json resources.");
-                
-                if let Some(path) = resource_path_option {
-                     copy(&path, &target_db_path)
-                        .expect(&format!("Failed to copy database from {:?} to {:?}", path, target_db_path));
+                if let Some(resource_path) = handle.path_resolver().resolve_resource("../public/database.json") {
+                    copy(&resource_path, &target_db_path)
+                        .expect(&format!("Failed to copy database from {:?} to {:?}", resource_path, target_db_path));
                 } else {
-                    panic!("Resource '../public/database.json' not found in the bundle.");
+                    panic!("Resource '../public/database.json' not found in the bundle. Check tauri.conf.json `resources` field.");
                 }
             }
 

@@ -1,0 +1,125 @@
+## Q&A Log: `src-tauri/src/main.rs` 컴파일 오류 수정 (2)
+
+**일시:** 2023-10-27
+
+### 문제 상황
+
+- `src-tauri/src/main.rs` 파일에 `database.json`을 `%APPDATA%` 폴더로 복사하는 로직을 추가했으나, `npx tauri build` 실행 시 컴파일 오류 발생.
+- 오류 메시지: `error[E0308]: mismatched types`
+
+### 상세 분석
+
+1.  **AS-IS (현재 코드):**
+
+    ```rust
+    #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+    use std::fs::{self, copy};
+    use std::path::PathBuf;
+    use tauri::Manager;
+
+    fn main() {
+        /*  // Original main function
+        tauri::Builder::default()
+            .run(tauri::generate_context!())
+            .expect("error while running tauri application");
+        */
+
+        tauri::Builder::default()
+            .setup(|app| {
+                let handle = app.handle();
+                let app_data_dir = handle
+                    .path_resolver()
+                    .app_data_dir()
+                    .expect("Failed to get app data directory. This is a critical error.");
+
+                let target_dir = app_data_dir.join("CheonanInventory");
+                let target_db_path = target_dir.join("database.json");
+
+                if !target_dir.exists() {
+                    fs::create_dir_all(&target_dir)
+                        .expect("Failed to create target data directory.");
+                }
+
+                if !target_db_path.exists() {
+                    let resource_path_option = handle
+                        .path_resolver()
+                        .resolve_resource("../public/database.json") // Adjusted path to be relative to src-tauri
+                        .expect("Failed to resolve resource. Check if '../public/database.json' is in tauri.conf.json resources.");
+                    
+                    if let Some(path) = resource_path_option {
+                         copy(&path, &target_db_path)
+                            .expect(&format!("Failed to copy database from {:?} to {:?}", path, target_db_path));
+                    } else {
+                        panic!("Resource '../public/database.json' not found in the bundle.");
+                    }
+                }
+
+                Ok(())
+            })
+            .run(tauri::generate_context!())
+            .expect("error while running tauri application");
+    }
+    ```
+
+2.  **오류 원인:**
+
+    - **타입 불일치:** `handle.path_resolver().resolve_resource(...)` 함수는 `Option<PathBuf>` 타입을 반환합니다. 즉, 리소스를 찾으면 `Some(경로)`를, 못 찾으면 `None`을 반환합니다. 이전 코드에서는 이 반환값을 `expect()`로 바로 처리하려고 시도했고, 그 다음에는 `if let Some` 구문과 `resource_path_option` 변수의 타입이 맞지 않아 오류가 발생했습니다. `if let Some(path) = resource_path_option` 에서 `resource_path_option`은 `PathBuf`인데 `Option`으로 잘못 판단했습니다.
+    - **불필요한 `use` 구문:** `tauri::Manager`가 코드 내에서 직접 사용되지 않아 `unused import` 경고가 발생했습니다. 하지만 `app.handle()`이 `Manager` 트레이트의 메소드를 사용하므로, `use tauri::Manager;` 자체는 필요합니다. 이 부분은 제가 잘못 판단했습니다.
+    - **리소스 경로:** `tauri.conf.json`의 `resources` 필드에 `"../public/database.json"` 라고 명시되어 있으므로, 코드에서도 이 경로를 그대로 사용하는 것이 맞습니다.
+
+3.  **TO-BE (수정 제안 코드):**
+
+    ```rust
+    #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+    use std::fs::{self, copy};
+    // use std::path::PathBuf; // fs::copy가 PathBuf를 사용하므로 이 줄은 유지하거나, 컴파일러가 추론하도록 둘 수 있습니다.
+    use tauri::Manager; // path_resolver() 사용을 위해 필요합니다.
+
+    fn main() {
+        /*  // Original main function
+        tauri::Builder::default()
+            .run(tauri::generate_context!())
+            .expect("error while running tauri application");
+        */
+
+        tauri::Builder::default()
+            .setup(|app| {
+                let handle = app.handle();
+                let app_data_dir = handle
+                    .path_resolver()
+                    .app_data_dir()
+                    .expect("Failed to get app data directory. This is a critical error.");
+
+                let target_dir = app_data_dir.join("CheonanInventory");
+                let target_db_path = target_dir.join("database.json");
+
+                if !target_dir.exists() {
+                    fs::create_dir_all(&target_dir)
+                        .expect("Failed to create target data directory.");
+                }
+
+                if !target_db_path.exists() {
+                    // resolve_resource는 Option<PathBuf>를 반환합니다.
+                    if let Some(resource_path) = handle.path_resolver().resolve_resource("../public/database.json") {
+                        copy(&resource_path, &target_db_path)
+                            .expect(&format!("Failed to copy database from {:?} to {:?}", resource_path, target_db_path));
+                    } else {
+                        // 리소스를 찾지 못했을 때 패닉을 발생시켜 문제를 명확히 알립니다.
+                        panic!("Resource '../public/database.json' not found in the bundle. Check tauri.conf.json `resources` field.");
+                    }
+                }
+
+                Ok(())
+            })
+            .run(tauri::generate_context!())
+            .expect("error while running tauri application");
+    }
+    ```
+
+### 조치 계획
+
+1.  위의 `TO-BE` 코드로 `src-tauri/src/main.rs` 파일을 덮어씁니다.
+2.  GitHub에 변경사항을 커밋하고 푸시합니다.
+3.  사용자에게 `install.bat` 재실행을 요청합니다.
