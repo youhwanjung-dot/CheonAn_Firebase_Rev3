@@ -95,17 +95,20 @@ const TauriApp = () => {
 
     useEffect(() => {
         const DATA_FILE_NAME = 'database.json';
+        const APP_DIR_NAME = 'CheonanInventory';
+
         const initializeData = async () => {
             try {
                 let finalData: AppData;
                 const appDataDirPath = await path.appDataDir();
-                if (!(await fs.exists(appDataDirPath))) {
-                    await fs.createDir(appDataDirPath);
+                const appDirPath = await path.join(appDataDirPath, APP_DIR_NAME);
+
+                if (!(await fs.exists(appDirPath))) {
+                    await fs.createDir(appDirPath);
                 }
-                const userFilePath = await path.join(appDataDirPath, DATA_FILE_NAME);
-                
-                // 1. 리소스 경로 수정: 'public/database.json'
-                const resourcePath = await path.resolveResource(`public/${DATA_FILE_NAME}`);
+
+                const userFilePath = await path.join(appDirPath, DATA_FILE_NAME);
+                const resourcePath = await path.resolveResource('database.json');
 
                 if (await fs.exists(userFilePath)) {
                     const localFileContent = await fs.readTextFile(userFilePath);
@@ -129,17 +132,18 @@ const TauriApp = () => {
                         finalData = localData;
                     }
                 } else {
-                    // 2. 단계별 확인 메시지 추가
-                    alert('1차 확인: AppData에 파일이 없습니다. 초기 데이터 복사를 시작합니다.');
-                    
-                    const resourceFileContent = await fs.readTextFile(resourcePath);
-                    alert(`2차 확인: 리소스 파일에서 읽어온 원본 데이터:\n${resourceFileContent}`);
-                    
-                    finalData = JSON.parse(resourceFileContent) as AppData;
-                    await fs.writeTextFile(userFilePath, resourceFileContent);
-                    
-                    const newlyCreatedContent = await fs.readTextFile(userFilePath);
-                    alert(`3차 확인: 새로 생성된 파일의 내용:\n${newlyCreatedContent}`);
+                    alert("확인(1차): 로컬 database.json이 없습니다. 리소스에서 복사를 시작합니다.");
+                    try {
+                        const resourceContent = await fs.readTextFile(resourcePath);
+                        alert(`확인(2차): 리소스 읽기 성공!\n내용 요약: ${resourceContent.substring(0, 80)}...`);
+                        await fs.writeTextFile(userFilePath, resourceContent);
+                        const newlyCreatedContent = await fs.readTextFile(userFilePath);
+                        alert(`확인(3차): 신규 파일 쓰기 & 읽기 성공!\n내용 요약: ${newlyCreatedContent.substring(0, 80)}...`);
+                        finalData = JSON.parse(resourceContent) as AppData;
+                    } catch (error) {
+                        alert(`초기화 오류: 리소스 파일을 처리하는 중 문제가 발생했습니다: ${error}`);
+                        throw error;
+                    }
                 }
 
                 setInventory(sortInventory(finalData.inventory || []));
@@ -167,7 +171,11 @@ const TauriApp = () => {
         const handler = setTimeout(async () => {
             try {
                 const appDataDirPath = await path.appDataDir();
-                const filePath = await path.join(appDataDirPath, 'database.json');
+                const appDirPath = await path.join(appDataDirPath, 'CheonanInventory');
+                if (!(await fs.exists(appDirPath))) {
+                    await fs.createDir(appDirPath);
+                }
+                const filePath = await path.join(appDirPath, 'database.json');
                 const currentState: AppData = { dbVersion, inventory, transactions, users, sites, locations };
                 await fs.writeTextFile(filePath, JSON.stringify(currentState, null, 2));
             } catch (error) {
@@ -225,12 +233,15 @@ const TauriApp = () => {
 
     const executeReset = async () => {
         try {
-            // 리소스 경로 수정
-            const resourcePath = await path.resolveResource('public/database.json');
+            const resourcePath = await path.resolveResource('database.json');
             const fileContent = await fs.readTextFile(resourcePath);
             const data = JSON.parse(fileContent) as AppData;
             const appDataDirPath = await path.appDataDir();
-            const filePath = await path.join(appDataDirPath, 'database.json');
+            const appDirPath = await path.join(appDataDirPath, 'CheonanInventory');
+            if (!(await fs.exists(appDirPath))) {
+                await fs.createDir(appDirPath);
+            }
+            const filePath = await path.join(appDirPath, 'database.json');
             await fs.writeTextFile(filePath, fileContent);
 
             setInventory(sortInventory(data.inventory || []));
