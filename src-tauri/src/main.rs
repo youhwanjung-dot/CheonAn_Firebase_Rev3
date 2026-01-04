@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+// Last check: 2023-10-27
 use std::fs::{self, copy};
-use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
