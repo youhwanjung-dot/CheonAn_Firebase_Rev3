@@ -1,42 +1,43 @@
-# TauriApp.tsx 수정 계획
+// [TauriApp.tsx] 데이터 로딩부 수정
+const initializeData = async () => {
+    try {
+        const appDataDirPath = await path.appDataDir();
+        const userFilePath = await path.join(appDataDirPath, 'database.json');
+        
+        // [핵심 수정] tauri.conf.json에서 "public"을 리소스로 지정했으므로
+        // resolveResource에는 'public/database.json'을 넘겨야 정확한 경로를 찾습니다.
+        const resourcePath = await path.resolveResource('public/database.json'); 
 
-안녕하세요 사장님, QA2.txt 파일 내용을 기반으로 `src/App/TauriApp.tsx` 파일 수정 계획을 수립했습니다. 함께 검토 부탁드립니다.
+        if (await fs.exists(userFilePath)) {
+            const localContent = await fs.readTextFile(userFilePath);
+            setInventory(JSON.parse(localContent).inventory || []);
+            // ... 생략
+        } else {
+            // 1차 확인: 권한 스코프 진입 확인
+            alert("⚠️ 확인(1차): 로컬 파일 없음. 리소스 접근을 시도합니다.");
 
-## 문제점
+            // 2차 확인: 리소스 실제 경로 출력 및 읽기 시도
+            try {
+                const resourceContent = await fs.readTextFile(resourcePath);
+                
+                if (!resourceContent || resourceContent.trim() === "") {
+                    alert(`❌ 확인(2차 실패): 경로는 찾았으나 내용이 비어있습니다.\n경로: ${resourcePath}`);
+                } else {
+                    alert(`✅ 확인(2차 성공): 데이터를 찾았습니다!\n글자수: ${resourceContent.length}`);
+                }
 
-1.  **잘못된 리소스 경로:** 앱이 초기 `database.json` 파일을 `resources/database.json`에서 찾으려고 하지만, 
-실제 파일은 `resources/public/database.json`에 있습니다.
-2.  **불분명한 데이터 초기화 과정:** 데이터 파일이 생성될 때, 내용이 비어있는지 혹은 정상적으로 복사되었는지 확인하기 어렵습니다.
-
-## 해결 방안
-
-`src/App/TauriApp.tsx` 파일의 `initializeData` 함수와 `executeReset` 함수를 다음과 같이 수정하여 문제를 해결하고, 데이터 흐름을 명확하게 추적할 수 있도록 하겠습니다.
-
-### 1. 리소스 경로 수정
-
--   `initializeData` 함수 내의 `path.resolveResource('database.json')` 코드를 `path.resolveResource('public/database.json')`으로 변경합니다.
--   `executeReset` 함수 내의 `path.resolveResource('database.json')` 코드 또한 `path.resolveResource('public/database.json')`으로 함께 변경하여, 데이터 초기화 기능도 정상 동작하도록 수정합니다.
-
-### 2. 단계별 확인 메시지 추가 (`initializeData` 함수)
-
-데이터 파일이 없는 초기 실행 시, 아래의 순서대로 `alert` 메시지를 출력하여 각 단계의 성공 여부와 데이터 상태를 명확히 확인합니다.
-
--   **1차 확인 (파일 부재 알림):**
-    -   `AppData` 폴더에 `database.json` 파일이 없는 것을 확인하는 시점에 알림을 띄웁니다.
-    -   `alert('1차 확인: AppData에 파일이 없습니다. 초기 데이터 복사를 시작합니다.');`
-
--   **2차 확인 (원본 데이터 읽기 검증):**
-    -   `public/database.json`에서 원본 데이터를 성공적으로 읽어온 직후, 그 내용을 알림으로 보여줍니다.
-    -   `alert(\`2차 확인: 리소스 파일에서 읽어온 원본 데이터:\\n\${resourceFileContent}\`);`
-
--   **3차 확인 (파일 생성 및 내용 검증):**
-    -   읽어온 원본 데이터를 `AppData` 폴더에 `database.json`으로 저장한 직후, 새로 생성된 파일을 즉시 다시 읽어 그 내용을 알림으로 보여줍니다. 이를 통해 파일이 정상적으로 저장되었는지 최종 확인합니다.
-    -   `const newlyCreatedContent = await fs.readTextFile(userFilePath);`
-    -   `alert(\`3차 확인: 새로 생성된 파일의 내용:\\n\${newlyCreatedContent}\`);`
-
-### 기대 효과
-
--   `database.json` 파일 경로 오류가 해결되어, 앱 최초 실행 시 정상적인 초기 데이터로 시작할 수 있습니다.
--   단계별 확인 메시지를 통해 데이터 초기화 과정의 투명성을 확보하고, 추후 유사 문제 발생 시 원인 파악을 용이하게 합니다.
-
-위 계획에 따라 수정을 진행하겠습니다.
+                // 3차 확인: 복사 작업 후 파일 크기 검증
+                await fs.writeTextFile(userFilePath, resourceContent);
+                const verifyFile = await fs.readTextFile(userFilePath);
+                alert(`📦 확인(3차): 복사 완료. 최종 파일 크기: ${verifyFile.length} bytes`);
+                
+                const data = JSON.parse(resourceContent);
+                // ... 데이터 세팅 로직 
+            } catch (err) {
+                alert(`🚨 권한 혹은 경로 오류: ${err}\n시도 경로: ${resourcePath}`);
+            }
+        }
+    } catch (critical) {
+        console.error(critical);
+    }
+};

@@ -7,12 +7,12 @@
   },
   "package": {
     "productName": "cheonan-sujil-inventory",
-    "version": "3.5.1"
+    "version": "3.6.0"
   },
   "tauri": {
     "bundle": {
       "active": true,
-      "targets": ["deb", "rpm", "msi"],
+      "targets": "all",
       "identifier": "CheonanInventory",
       "icon": [
         "icons/32x32.png",
@@ -22,7 +22,7 @@
         "icons/icon.ico"
       ],
       "resources": [
-        "../public/database.json"
+        "public"
       ]
     },
     "allowlist": {
@@ -31,6 +31,7 @@
         "all": true,
         "scope": [
           "$APPDATA/**",
+          "$RESOURCE/public/**",
           "$RESOURCE/**"
         ]
       }
