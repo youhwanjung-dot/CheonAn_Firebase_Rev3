@@ -38,9 +38,37 @@ const UserManagerModal = React.lazy(() => import('./components/UserManagerModal'
 const MasterDataManagerModal = React.lazy(() => import('./components/MasterDataManagerModal'));
 const MonthlyReportModal = React.lazy(() => import('./components/MonthlyReportModal'));
 
-import { InventoryItem, InventoryTransaction, User, ViewState } from './types';
+import { InventoryItem, InventoryTransaction, User, ViewState, AppData } from './types';
 import { APP_VERSION } from './constants';
 import { ActionLogger } from './utils/logger';
+
+// [Data Migration] Intelligent data merge logic
+const migrateData = (localData: AppData, resourceData: AppData): AppData => {
+    console.log("Starting data migration...");
+    console.log("Local DB Version:", localData.dbVersion, "Resource DB Version:", resourceData.dbVersion);
+
+    // 1. Preserve user's core data (Inventory, Transactions)
+    const mergedData: AppData = {
+        ...localData, // Start with local data as a base
+        inventory: localData.inventory || [],
+        transactions: localData.transactions || [],
+        dbVersion: resourceData.dbVersion, // 2. Always update to the latest DB version from the app
+    };
+
+    // 3. Merge collections (Users, Sites, Locations) by adding new items without duplicates
+    const mergeCollection = <T extends { id: string } | string>(localList: T[], newList: T[], key?: keyof T) => {
+        const localSet = new Set(localList.map(item => typeof item === 'string' ? item : item[key!]));
+        const newItems = newList.filter(item => !localSet.has(typeof item === 'string' ? item : item[key!]));
+        return [...localList, ...newItems];
+    };
+
+    mergedData.users = mergeCollection(localData.users || [], resourceData.users || [], 'id');
+    mergedData.sites = mergeCollection(localData.sites || [], resourceData.sites || []);
+    mergedData.locations = mergeCollection(localData.locations || [], resourceData.locations || []);
+
+    console.log("Migration complete. Data merged.");
+    return mergedData;
+};
 
 const App = () => {
     const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -50,6 +78,9 @@ const App = () => {
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
     const [users, setUsers] = useState<User[]>([]);
+    // State for master data
+    const [sites, setSites] = useState<string[]>([]);
+    const [locations, setLocations] = useState<string[]>([]);
 
     const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -69,64 +100,57 @@ const App = () => {
     const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
     const [showManual, setShowManual] = useState(false);
 
-    /* [Original Web-only Data Loading] - This code is preserved for reference.
-    // [Web Preview Fix] Re-enabled fetch for web development preview
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                // In web preview, data is fetched from the /public folder
-                const response = await fetch('/database.json'); 
-                const data = await response.json();
-                setInventory(sortInventory(data.inventory || []));
-                setTransactions(data.transactions || []);
-                setUsers(data.users || []);
-            } catch (error) {
-                console.error("Web Preview: Failed to fetch initial data:", error);
-            } finally {
-                setIsDataLoaded(true);
-            }
-        };
-
-        fetchData();
-    }, []);
-    */
-
-    // [Tauri Integration] Hybrid data loading for both Tauri and Web environments
+    // [Tauri Integration] Hybrid data loading with migration
     useEffect(() => {
         const DATA_FILE_NAME = 'database.json';
 
         const initializeData = async () => {
             try {
-                let data;
-                // If in Tauri environment, use file system
+                let finalData: AppData;
+
                 if (window.__TAURI__) {
                     const appDataDirPath = await path.appDataDir();
                     if (!(await fs.exists(appDataDirPath))) {
                         await fs.createDir(appDataDirPath);
                     }
-                    const filePath = await path.join(appDataDirPath, DATA_FILE_NAME);
+                    const userFilePath = await path.join(appDataDirPath, DATA_FILE_NAME);
 
-                    let fileContent;
-                    if (await fs.exists(filePath)) {
-                        // If user's data file exists, load it
-                        fileContent = await fs.readTextFile(filePath);
+                    // Load the app's built-in database (resource)
+                    const resourcePath = await path.resolveResource(DATA_FILE_NAME);
+                    const resourceFileContent = await fs.readTextFile(resourcePath);
+                    const resourceData = JSON.parse(resourceFileContent) as AppData;
+
+                    if (await fs.exists(userFilePath)) {
+                        // User has existing data, check for migration
+                        const localFileContent = await fs.readTextFile(userFilePath);
+                        const localData = JSON.parse(localFileContent) as AppData;
+                        
+                        if (localData.dbVersion !== resourceData.dbVersion) {
+                            // Versions differ, migrate data!
+                            finalData = migrateData(localData, resourceData);
+                            // Save the migrated data back to the user's file
+                            await fs.writeTextFile(userFilePath, JSON.stringify(finalData, null, 2));
+                        } else {
+                            // Versions are the same, just use local data
+                            finalData = localData;
+                        }
                     } else {
-                        // If not, load the initial database from resources and copy to appDataDir
-                        const resourcePath = await path.resolveResource(DATA_FILE_NAME);
-                        fileContent = await fs.readTextFile(resourcePath);
-                        await fs.writeFile({ path: filePath, contents: fileContent });
+                        // First run, copy resource data to user's data directory
+                        finalData = resourceData;
+                        await fs.writeTextFile(userFilePath, resourceFileContent);
+                        console.log("First run: Copied initial database.");
                     }
-                    data = JSON.parse(fileContent);
-
                 } else {
-                    // If in web browser, fetch from public folder
-                    const response = await fetch('/database.json');
-                    data = await response.json();
+                     // Web browser environment (for preview)
+                     const response = await fetch(`/database.json?v=${APP_VERSION}`); // Cache-busting
+                     finalData = await response.json();
                 }
 
-                setInventory(sortInventory(data.inventory || []));
-                setTransactions(data.transactions || []);
-                setUsers(data.users || []);
+                setInventory(sortInventory(finalData.inventory || []));
+                setTransactions(finalData.transactions || []);
+                setUsers(finalData.users || []);
+                setSites(finalData.sites || []);
+                setLocations(finalData.locations || []);
 
             } catch (error) {
                 console.error("Hybrid Data Load: Failed to initialize data:", error);
@@ -138,10 +162,8 @@ const App = () => {
         initializeData();
     }, []);
 
-
-    // [Tauri Integration] Enabled Tauri-specific data saving logic
+    // [Tauri Integration] Data saving logic
     useEffect(() => {
-        // Only run this effect in a Tauri environment after initial data is loaded
         if (!isDataLoaded || !window.__TAURI__) return;
 
         const handler = setTimeout(async () => {
@@ -149,27 +171,26 @@ const App = () => {
                 const appDataDirPath = await path.appDataDir();
                 const filePath = await path.join(appDataDirPath, 'database.json');
                 
-                const payload = {
+                const currentState: AppData = {
+                    dbVersion: (await JSON.parse(await fs.readTextFile(filePath))).dbVersion, // Preserve existing dbVersion
                     inventory,
                     transactions,
-                    users
+                    users,
+                    sites,
+                    locations,
                 };
 
-                await fs.writeFile({
-                    path: filePath,
-                    contents: JSON.stringify(payload, null, 2)
-                });
-                 console.log("Data saved successfully to:", filePath);
+                await fs.writeTextFile(filePath, JSON.stringify(currentState, null, 2));
+                console.log("Data saved successfully to:", filePath);
             } catch (error) {
                 console.error("Tauri: Failed to save data:", error);
             }
-        }, 1000); // Debounce saving to avoid excessive writes
+        }, 1000); // Debounce saving
 
-        return () => {
-            clearTimeout(handler);
-        };
-    }, [inventory, transactions, users, isDataLoaded]);
+        return () => clearTimeout(handler);
+    }, [inventory, transactions, users, sites, locations, isDataLoaded]);
 
+    // ... (the rest of the component remains the same) ...
 
     // Theme persistence
     useEffect(() => {
@@ -233,17 +254,15 @@ const App = () => {
                 await fs.writeFile({ path: filePath, contents: fileContent });
 
             } else {
-                /* [Original Web-only Reset]
-                 const response = await fetch('/database.json');
-                 data = await response.json();
-                */
-                // Web environment: Refetch the original data
-                const response = await fetch('/database.json');
+                // Web environment: Refetch the original data with cache-busting
+                const response = await fetch(`/database.json?v=${APP_VERSION}`);
                 data = await response.json();
             }
              setInventory(sortInventory(data.inventory || []));
              setTransactions(data.transactions || []);
              setUsers(data.users || []);
+             setSites(data.sites || []);
+             setLocations(data.locations || []);
 
         } catch (error) {
             console.error("Hybrid Reset: Failed to reset database:", error);
@@ -398,7 +417,7 @@ const App = () => {
                 <div className="flex-1 overflow-hidden p-4 sm:p-6 relative">
                     <Suspense fallback={<LoadingFallback />}>
                         {currentView === 'DASHBOARD' && <Dashboard items={sortedInventory} isDarkMode={isDarkMode} />}
-                        {currentView === 'INVENTORY' && <InventoryList items={sortedInventory} user={user} onAdd={handleAddItem} onEdit={handleEditItem} onDelete={handleDeleteItem} onReset={() => setShowResetConfirm(true)} onTransaction={(item) => { setTransactionItemId(item.id); setShowTransactionModal(true); }} onOpenMonthlyReport={() => setShowMonthlyReport(true)} onOpenDBManager={() => setShowDBManager(true)} />}
+                        {currentVienpmw === 'INVENTORY' && <InventoryList items={sortedInventory} user={user} onAdd={handleAddItem} onEdit={handleEditItem} onDelete={handleDeleteItem} onReset={() => setShowResetConfirm(true)} onTransaction={(item) => { setTransactionItemId(item.id); setShowTransactionModal(true); }} onOpenMonthlyReport={() => setShowMonthlyReport(true)} onOpenDBManager={() => setShowDBManager(true)} />}
                         {currentView === 'ANALYSIS' && <AIAdvisor items={sortedInventory} transactions={transactions} />}
                         {currentView === 'IMPORT' && <ExcelImport onImport={(items) => { setInventory(prev => sortInventory([...prev, ...items])); setCurrentView('INVENTORY'); }} onCancel={() => setCurrentView('INVENTORY')} currentInventory={inventory} />}
                         {currentView === 'HISTORY_IMPORT' && <TransactionHistoryImport onImport={(txs) => { setTransactions(prev => [...txs, ...prev]); setCurrentView('INVENTORY'); }} onCancel={() => setCurrentView('INVENTORY')} inventory={inventory} />}
@@ -413,6 +432,8 @@ const App = () => {
                 transactions={transactions}
                 currentUser={user}
                 users={users}
+                sites={sites}
+                locations={locations}
                 onSave={handleTransactionSave}
                 onUpdate={handleTransactionUpdate}
                 onDelete={handleTransactionDelete}
