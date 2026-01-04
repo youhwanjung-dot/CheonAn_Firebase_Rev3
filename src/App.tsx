@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, Suspense, useMemo } from 'react';
 import './index.css';
 import {
@@ -15,8 +16,8 @@ import {
     Box,
     BookOpen
 } from 'lucide-react';
-// [Web Preview Fix] Temporarily disable Tauri API for web development
-// import { fs, path } from '@tauri-apps/api';
+// [Tauri Integration] Import fs and path modules from Tauri API
+import { fs, path } from '@tauri-apps/api';
 
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -68,6 +69,7 @@ const App = () => {
     const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
     const [showManual, setShowManual] = useState(false);
 
+    /* [Original Web-only Data Loading] - This code is preserved for reference.
     // [Web Preview Fix] Re-enabled fetch for web development preview
     useEffect(() => {
         const fetchData = async () => {
@@ -87,55 +89,59 @@ const App = () => {
 
         fetchData();
     }, []);
+    */
 
-    // [Web Preview Fix] Temporarily disabled Tauri data loading logic
-    /*
+    // [Tauri Integration] Hybrid data loading for both Tauri and Web environments
     useEffect(() => {
         const DATA_FILE_NAME = 'database.json';
 
         const initializeData = async () => {
             try {
-                // This part only runs in a real Tauri app, not in a web browser
-                const appDataDirPath = await path.appDataDir();
-                if (!(await fs.exists(appDataDirPath))) {
-                    await fs.createDir(appDataDirPath);
-                }
-                const filePath = await path.join(appDataDirPath, DATA_FILE_NAME);
+                let data;
+                // If in Tauri environment, use file system
+                if (window.__TAURI__) {
+                    const appDataDirPath = await path.appDataDir();
+                    if (!(await fs.exists(appDataDirPath))) {
+                        await fs.createDir(appDataDirPath);
+                    }
+                    const filePath = await path.join(appDataDirPath, DATA_FILE_NAME);
 
-                let fileContent;
-                if (await fs.exists(filePath)) {
-                    fileContent = await fs.readTextFile(filePath);
+                    let fileContent;
+                    if (await fs.exists(filePath)) {
+                        // If user's data file exists, load it
+                        fileContent = await fs.readTextFile(filePath);
+                    } else {
+                        // If not, load the initial database from resources and copy to appDataDir
+                        const resourcePath = await path.resolveResource(DATA_FILE_NAME);
+                        fileContent = await fs.readTextFile(resourcePath);
+                        await fs.writeFile({ path: filePath, contents: fileContent });
+                    }
+                    data = JSON.parse(fileContent);
+
                 } else {
-                    const resourcePath = await path.resolveResource(DATA_FILE_NAME);
-                    fileContent = await fs.readTextFile(resourcePath);
-                    await fs.writeFile({ path: filePath, contents: fileContent });
+                    // If in web browser, fetch from public folder
+                    const response = await fetch('/database.json');
+                    data = await response.json();
                 }
 
-                const data = JSON.parse(fileContent);
                 setInventory(sortInventory(data.inventory || []));
                 setTransactions(data.transactions || []);
                 setUsers(data.users || []);
 
             } catch (error) {
-                console.error("Tauri: Failed to initialize data:", error);
+                console.error("Hybrid Data Load: Failed to initialize data:", error);
             } finally {
                 setIsDataLoaded(true);
             }
         };
-        // Check if running in Tauri context before trying to use Tauri APIs
-        if (window.__TAURI__) {
-          initializeData();
-        } else {
-          console.warn('Not in Tauri context. Skipping native data initialization.');
-          // As a fallback for non-Tauri env, you could use the fetch method here too
-          setIsDataLoaded(true); // Still need to unblock the UI
-        }
-    }, []);
-    */
 
-    // [Web Preview Fix] Temporarily disabled Tauri data saving logic
-    /*
+        initializeData();
+    }, []);
+
+
+    // [Tauri Integration] Enabled Tauri-specific data saving logic
     useEffect(() => {
+        // Only run this effect in a Tauri environment after initial data is loaded
         if (!isDataLoaded || !window.__TAURI__) return;
 
         const handler = setTimeout(async () => {
@@ -153,16 +159,17 @@ const App = () => {
                     path: filePath,
                     contents: JSON.stringify(payload, null, 2)
                 });
+                 console.log("Data saved successfully to:", filePath);
             } catch (error) {
                 console.error("Tauri: Failed to save data:", error);
             }
-        }, 1000);
+        }, 1000); // Debounce saving to avoid excessive writes
 
         return () => {
             clearTimeout(handler);
         };
     }, [inventory, transactions, users, isDataLoaded]);
-    */
+
 
     // Theme persistence
     useEffect(() => {
@@ -212,19 +219,37 @@ const App = () => {
     };
 
     const executeReset = async () => {
-        // This function needs to be adapted. In web, we can't write to the file system.
-        // We will just refetch the original data for a 'soft reset'
         try {
-             const response = await fetch('/database.json');
-             const data = await response.json();
+            let data;
+            if (window.__TAURI__) {
+                // Tauri environment: Read original data from resources
+                const resourcePath = await path.resolveResource('database.json');
+                const fileContent = await fs.readTextFile(resourcePath);
+                data = JSON.parse(fileContent);
+
+                // Overwrite the user's current database with the original one
+                const appDataDirPath = await path.appDataDir();
+                const filePath = await path.join(appDataDirPath, 'database.json');
+                await fs.writeFile({ path: filePath, contents: fileContent });
+
+            } else {
+                /* [Original Web-only Reset]
+                 const response = await fetch('/database.json');
+                 data = await response.json();
+                */
+                // Web environment: Refetch the original data
+                const response = await fetch('/database.json');
+                data = await response.json();
+            }
              setInventory(sortInventory(data.inventory || []));
              setTransactions(data.transactions || []);
              setUsers(data.users || []);
+
         } catch (error) {
-            console.error("Web Preview: Failed to reset database:", error);
+            console.error("Hybrid Reset: Failed to reset database:", error);
         }
         setShowResetConfirm(false);
-        ActionLogger.log('System Database Reset (Web Preview)');
+        ActionLogger.log('System Database Reset');
     };
 
     const handleTransactionSave = (tx: Omit<InventoryTransaction, 'id' | 'currentStockSnapshot'>) => {
@@ -375,7 +400,7 @@ const App = () => {
                         {currentView === 'DASHBOARD' && <Dashboard items={sortedInventory} isDarkMode={isDarkMode} />}
                         {currentView === 'INVENTORY' && <InventoryList items={sortedInventory} user={user} onAdd={handleAddItem} onEdit={handleEditItem} onDelete={handleDeleteItem} onReset={() => setShowResetConfirm(true)} onTransaction={(item) => { setTransactionItemId(item.id); setShowTransactionModal(true); }} onOpenMonthlyReport={() => setShowMonthlyReport(true)} onOpenDBManager={() => setShowDBManager(true)} />}
                         {currentView === 'ANALYSIS' && <AIAdvisor items={sortedInventory} transactions={transactions} />}
-                        {currentVew === 'IMPORT' && <ExcelImport onImport={(items) => { setInventory(prev => sortInventory([...prev, ...items])); setCurrentView('INVENTORY'); }} onCancel={() => setCurrentView('INVENTORY')} currentInventory={inventory} />}
+                        {currentView === 'IMPORT' && <ExcelImport onImport={(items) => { setInventory(prev => sortInventory([...prev, ...items])); setCurrentView('INVENTORY'); }} onCancel={() => setCurrentView('INVENTORY')} currentInventory={inventory} />}
                         {currentView === 'HISTORY_IMPORT' && <TransactionHistoryImport onImport={(txs) => { setTransactions(prev => [...txs, ...prev]); setCurrentView('INVENTORY'); }} onCancel={() => setCurrentView('INVENTORY')} inventory={inventory} />}
                     </Suspense>
                 </div>
@@ -413,7 +438,7 @@ const App = () => {
                 onCancel={() => setShowClearHistoryConfirm(false)}
             />}
             {showManual && <ManualModal onClose={() => setShowManual(false)} />}
-            <div className="fixed bottom-2 right-2 text-[10px] text-slate-300 pointer-events-none z-50">v{APP_VERSION} (Web Preview)</div>
+            <div className="fixed bottom-2 right-2 text-[10px] text-slate-300 pointer-events-none z-50">v{APP_VERSION}</div>
         </div>
     );
 };
