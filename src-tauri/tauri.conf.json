@@ -30,8 +30,8 @@
       "fs": {
         "all": true,
         "scope": [
-          "$APPDATA/*",
-          "$RESOURCE/*"
+          "$APPDATA/**",
+          "$RESOURCE/**"
         ]
       }
     },
