@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "cheonan-sujil-inventory",
-    "version": "3.5.0"
+    "version": "3.5.1"
   },
   "tauri": {
     "bundle": {
@@ -22,14 +22,17 @@
         "icons/icon.ico"
       ],
       "resources": [
-        "../database.json"
+        "../public/database.json"
       ]
     },
     "allowlist": {
-      "all": false,
+      "all": true,
       "fs": {
         "all": true,
-        "scope": ["$RESOURCE/*"]
+        "scope": [
+          "$APPDATA/*",
+          "$RESOURCE/*"
+        ]
       }
     },
     "windows": [
@@ -40,7 +43,7 @@
         "resizable": true,
         "fullscreen": false
       }
-    ],
+    },
     "security": {
       "csp": null
     }
