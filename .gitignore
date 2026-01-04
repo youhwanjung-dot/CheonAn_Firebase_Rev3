@@ -1,11 +1,30 @@
+
+# Dependencies
 /node_modules
-/dist
+
+# Tauri build artifacts
 /src-tauri/target
-/firebase_backup
-firebase-debug.log
-.DS_Store
+/src-tauri/gen
+
+# Vite build output
+/dist
+
+# Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
+
+# Local development
+.env.local
+.DS_Store
+
+# Backups
+/firebase_backup/
+
+#IDE settings
+.idx/
+.vscode/
+
+# Temporary files
+temp-*
