@@ -108,50 +108,54 @@ const TauriApp = () => {
                 }
 
                 const userFilePath = await path.join(appDirPath, DATA_FILE_NAME);
-                const resourcePath = await path.resolveResource(`public/${DATA_FILE_NAME}`);
+                let localData: AppData | null = null;
 
+                // 1. Try to load user's local data first (manual copy case)
                 if (await fs.exists(userFilePath)) {
                     const localFileContent = await fs.readTextFile(userFilePath);
-                    let localData: AppData;
                     try {
-                        localData = JSON.parse(localFileContent);
-                        if (!localData || typeof localData !== 'object') throw new Error("Local data is not valid.");
+                        const parsedData = JSON.parse(localFileContent);
+                        // Ensure the data is not empty and is a valid object
+                        if (parsedData && typeof parsedData === 'object' && Object.keys(parsedData).length > 0) {
+                             localData = parsedData;
+                        }
                     } catch (e) {
-                        console.error("Could not parse local data, using resource data.", e);
-                        const resourceFileContent = await fs.readTextFile(resourcePath);
-                        localData = JSON.parse(resourceFileContent) as AppData;
-                    }
-
-                    const resourceFileContent = await fs.readTextFile(resourcePath);
-                    const resourceData = JSON.parse(resourceFileContent) as AppData;
-
-                    if (localData.dbVersion !== resourceData.dbVersion) {
-                        finalData = migrateData(localData, resourceData);
-                        await fs.writeTextFile(userFilePath, JSON.stringify(finalData, null, 2));
-                    } else {
-                        finalData = localData;
-                    }
-                } else {
-                    alert("확인(1차): 로컬 database.json이 없습니다. 리소스에서 복사를 시작합니다.");
-                    try {
-                        const resourceContent = await fs.readTextFile(resourcePath);
-                        alert(`확인(2차): 리소스 읽기 성공!\n내용 요약: ${resourceContent.substring(0, 80)}...`);
-                        await fs.writeTextFile(userFilePath, resourceContent);
-                        const newlyCreatedContent = await fs.readTextFile(userFilePath);
-                        alert(`확인(3차): 신규 파일 쓰기 & 읽기 성공!\n내용 요약: ${newlyCreatedContent.substring(0, 80)}...`);
-                        finalData = JSON.parse(resourceContent) as AppData;
-                    } catch (error) {
-                        alert(`초기화 오류: 리소스 파일을 처리하는 중 문제가 발생했습니다: ${error}`);
-                        throw error;
+                        console.error("Could not parse local data, it might be corrupted or empty.", e);
                     }
                 }
 
+                // 2. If local data is invalid/missing, perform auto-recovery
+                if (!localData) {
+                    try {
+                        // This is the correct, robust way to find the resource
+                        const resourcePath = await path.resolveResource(DATA_FILE_NAME);
+                        const resourceContent = await fs.readTextFile(resourcePath);
+                        await fs.writeTextFile(userFilePath, resourceContent); // Overwrite/create the local file
+                        localData = JSON.parse(resourceContent) as AppData;
+                    } catch (error) {
+                        throw new Error(`초기 데이터 파일 복사에 실패했습니다. 프로그램 재설치가 필요합니다. 오류: ${error}`);
+                    }
+                }
+
+                // 3. Check for data migration against the resource version
+                const resourcePath = await path.resolveResource(DATA_FILE_NAME);
+                const resourceFileContent = await fs.readTextFile(resourcePath);
+                const resourceData = JSON.parse(resourceFileContent) as AppData;
+
+                if (localData.dbVersion !== resourceData.dbVersion) {
+                    finalData = migrateData(localData, resourceData);
+                    await fs.writeTextFile(userFilePath, JSON.stringify(finalData, null, 2));
+                } else {
+                    finalData = localData;
+                }
+                
                 setInventory(sortInventory(finalData.inventory || []));
                 setTransactions(finalData.transactions || []);
                 setUsers(finalData.users || []);
                 setSites(finalData.sites || []);
                 setLocations(finalData.locations || []);
                 setDbVersion(finalData.dbVersion);
+
             } catch (error) {
                 console.error("Tauri Data Load: Failed to initialize data:", error);
                  if (error instanceof Error) {
@@ -233,7 +237,7 @@ const TauriApp = () => {
 
     const executeReset = async () => {
         try {
-            const resourcePath = await path.resolveResource('public/database.json');
+            const resourcePath = await path.resolveResource('database.json');
             const fileContent = await fs.readTextFile(resourcePath);
             const data = JSON.parse(fileContent) as AppData;
             const appDataDirPath = await path.appDataDir();
@@ -393,7 +397,7 @@ const TauriApp = () => {
 
             {showLogoutConfirm && <ConfirmationModal title="로그아웃 확인" message="로그아웃 하시겠습니까?" confirmLabel="로그아웃" onConfirm={handleLogout} onCancel={() => setShowLogoutConfirm(false)} />}
             {showResetConfirm && <ConfirmationModal title="DB 초기화" message="모든 데이터(재고, 수불, 사용자)가 영구적으로 삭제됩니다. 계속하시겠습니까?" confirmLabel="초기화" isDangerous onConfirm={executeReset} onCancel={() => setShowResetConfirm(false)} />}
-            {showClearHistoryConfirm && transactionItem && <ConfirmationModal title="이력 전체 삭제" message={`'${transactionItem.name}' 품목의 모든 입출고 이력을 삭제합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`} confirmLabel="전체 삭제" isDangerous onConfirm={handleClearItemHistory} onCancel={() => setShowClearHistoryConfirm(false)} />}
+            {showClearHistoryConfirm && transactionItem && <ConfirmationModal title="이력 전체 삭제" message={`'${transactionItem.name}' 품목의 모든 입출고 이력을 삭제합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`} confirmLabel="전체 삭제" isDangerous onConfirm={handleClearHistoryConfirm} onCancel={() => setShowClearHistoryConfirm(false)} />}
             {showManual && <ManualModal onClose={() => setShowManual(false)} />}
             <div className="fixed bottom-2 right-2 text-[10px] text-slate-300 pointer-events-none z-50">v{APP_VERSION}</div>
         </div>
