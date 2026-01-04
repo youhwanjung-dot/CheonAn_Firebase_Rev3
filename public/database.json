@@ -1,4 +1,51 @@
 {
   "inventory": [],
-  "users": []
+  "transactions": [],
+  "users": [
+    {
+      "id": "admin",
+      "password": "1234",
+      "name": "관리자",
+      "permissions": "admin"
+    },
+    {
+      "id": "jyh",
+      "password": "1234",
+      "name": "정유환",
+      "permissions": "admin"
+    },
+    {
+      "id": "ksj",
+      "password": "1234",
+      "name": "강석진",
+      "permissions": "user"
+    },
+    {
+      "id": "lyh",
+      "password": "1234",
+      "name": "이용훈",
+      "permissions": "user"
+    },
+    {
+      "id": "lsh",
+      "password": "1234",
+      "name": "이석호",
+      "permissions": "user"
+    }
+  ],
+  "sites": [
+    "1단계 공정설비",
+    "2단계 공정설비",
+    "3단계 공정설비",
+    "4단계 공정설비",
+    "신설 통합침사지",
+    "신설 1.5단계 공정설비",
+    "신설 2단계 공정설비"
+  ],
+  "locations": [
+    "전기실 창고",
+    "탈수동 창고",
+    "분뇨동 창고",
+    "관리동 1층"
+  ]
 }
