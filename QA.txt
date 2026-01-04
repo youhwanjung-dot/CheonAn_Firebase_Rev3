@@ -1,97 +1,42 @@
-// [기존 import 문 생략...]
-import { fs, path } from '@tauri-apps/api'; // [활성화]
+# TauriApp.tsx 수정 계획
 
-const App = () => {
-    const [isDataLoaded, setIsDataLoaded] = useState(false);
-    const [dbVersion, setDbVersion] = useState<string>("1.0"); // [추가: 버전 상태 관리] [cite: 99]
-    // ... 기타 상태 변수들 (inventory, transactions, users 등)
+안녕하세요 사장님, QA2.txt 파일 내용을 기반으로 `src/App/TauriApp.tsx` 파일 수정 계획을 수립했습니다. 함께 검토 부탁드립니다.
 
-    // 1. 데이터 로드 및 지능적 병합 (Migration)
-    useEffect(() => {
-        const initializeData = async () => {
-            try {
-                let finalData;
+## 문제점
 
-                if (window.__TAURI__) {
-                    const DATA_FILE_NAME = 'database.json';
-                    const appDataDirPath = await path.appDataDir();
-                    if (!(await fs.exists(appDataDirPath))) await fs.createDir(appDataDirPath);
-                    const filePath = await path.join(appDataDirPath, DATA_FILE_NAME);
+1.  **잘못된 리소스 경로:** 앱이 초기 `database.json` 파일을 `resources/database.json`에서 찾으려고 하지만, 
+실제 파일은 `resources/public/database.json`에 있습니다.
+2.  **불분명한 데이터 초기화 과정:** 데이터 파일이 생성될 때, 내용이 비어있는지 혹은 정상적으로 복사되었는지 확인하기 어렵습니다.
 
-                    // 리소스(새 버전) 파일 읽기
-                    const resourcePath = await path.resolveResource(DATA_FILE_NAME);
-                    const resourceContent = await fs.readTextFile(resourcePath);
-                    const resourceData = JSON.parse(resourceContent);
+## 해결 방안
 
-                    if (await fs.exists(filePath)) {
-                        // 사용자 데이터가 있는 경우: 지능적 병합 수행
-                        const localContent = await fs.readTextFile(filePath);
-                        const localData = JSON.parse(localContent);
+`src/App/TauriApp.tsx` 파일의 `initializeData` 함수와 `executeReset` 함수를 다음과 같이 수정하여 문제를 해결하고, 데이터 흐름을 명확하게 추적할 수 있도록 하겠습니다.
 
-                        // [지능적 병합 로직]
-                        finalData = {
-                            ...localData, // 기존 재고(inventory), 수불(transactions) 보존
-                            dbVersion: resourceData.dbVersion, // 버전은 새 것으로 갱신
-                            // 기준 정보(Users)는 신규 항목만 추가 (ID 기준 중복 제외)
-                            users: [
-                                ...localData.users,
-                                ...resourceData.users.filter((ru: any) => !localData.users.some((lu: any) => lu.id === ru.id))
-                            ]
-                        };
-                    } else {
-                        // 최초 실행 시: 리소스 데이터를 복사하여 시작
-                        finalData = resourceData;
-                    }
-                } else {
-                    // Web Preview 환경 로직
-                    const response = await fetch(`/database.json?v=${APP_VERSION}`);
-                    finalData = await response.json();
-                }
+### 1. 리소스 경로 수정
 
-                // 앱 상태에 반영
-                setInventory(sortInventory(finalData.inventory || []));
-                setTransactions(finalData.transactions || []);
-                setUsers(finalData.users || []);
-                setDbVersion(finalData.dbVersion || "1.0"); // [cite: 101]
+-   `initializeData` 함수 내의 `path.resolveResource('database.json')` 코드를 `path.resolveResource('public/database.json')`으로 변경합니다.
+-   `executeReset` 함수 내의 `path.resolveResource('database.json')` 코드 또한 `path.resolveResource('public/database.json')`으로 함께 변경하여, 데이터 초기화 기능도 정상 동작하도록 수정합니다.
 
-            } catch (error) {
-                console.error("Initialization Failed:", error);
-            } finally {
-                setIsDataLoaded(true);
-            }
-        };
+### 2. 단계별 확인 메시지 추가 (`initializeData` 함수)
 
-        initializeData();
-    }, []);
+데이터 파일이 없는 초기 실행 시, 아래의 순서대로 `alert` 메시지를 출력하여 각 단계의 성공 여부와 데이터 상태를 명확히 확인합니다.
 
-    // 2. 안전한 데이터 저장 (Save Logic)
-    useEffect(() => {
-        if (!isDataLoaded || !window.__TAURI__) return;
+-   **1차 확인 (파일 부재 알림):**
+    -   `AppData` 폴더에 `database.json` 파일이 없는 것을 확인하는 시점에 알림을 띄웁니다.
+    -   `alert('1차 확인: AppData에 파일이 없습니다. 초기 데이터 복사를 시작합니다.');`
 
-        const handler = setTimeout(async () => {
-            try {
-                const appDataDirPath = await path.appDataDir();
-                const filePath = await path.join(appDataDirPath, 'database.json');
-                
-                // 오직 앱 상태(RAM) 정보에만 의존하여 페이로드 구성 
-                const payload = {
-                    dbVersion, // 보관 중인 버전을 그대로 기록 [cite: 101]
-                    inventory,
-                    transactions,
-                    users
-                };
+-   **2차 확인 (원본 데이터 읽기 검증):**
+    -   `public/database.json`에서 원본 데이터를 성공적으로 읽어온 직후, 그 내용을 알림으로 보여줍니다.
+    -   `alert(\`2차 확인: 리소스 파일에서 읽어온 원본 데이터:\\n\${resourceFileContent}\`);`
 
-                await fs.writeFile({
-                    path: filePath,
-                    contents: JSON.stringify(payload, null, 2)
-                });
-            } catch (error) {
-                console.error("Tauri: Failed to save data:", error);
-            }
-        }, 1000); // Debounce
+-   **3차 확인 (파일 생성 및 내용 검증):**
+    -   읽어온 원본 데이터를 `AppData` 폴더에 `database.json`으로 저장한 직후, 새로 생성된 파일을 즉시 다시 읽어 그 내용을 알림으로 보여줍니다. 이를 통해 파일이 정상적으로 저장되었는지 최종 확인합니다.
+    -   `const newlyCreatedContent = await fs.readTextFile(userFilePath);`
+    -   `alert(\`3차 확인: 새로 생성된 파일의 내용:\\n\${newlyCreatedContent}\`);`
 
-        return () => clearTimeout(handler);
-    }, [inventory, transactions, users, dbVersion, isDataLoaded]);
+### 기대 효과
 
-    // [이후 UI 렌더링 로직 생략...]
-};
+-   `database.json` 파일 경로 오류가 해결되어, 앱 최초 실행 시 정상적인 초기 데이터로 시작할 수 있습니다.
+-   단계별 확인 메시지를 통해 데이터 초기화 과정의 투명성을 확보하고, 추후 유사 문제 발생 시 원인 파악을 용이하게 합니다.
+
+위 계획에 따라 수정을 진행하겠습니다.

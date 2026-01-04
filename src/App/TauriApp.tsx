@@ -103,9 +103,9 @@ const TauriApp = () => {
                     await fs.createDir(appDataDirPath);
                 }
                 const userFilePath = await path.join(appDataDirPath, DATA_FILE_NAME);
-                const resourcePath = await path.resolveResource(DATA_FILE_NAME);
-                const resourceFileContent = await fs.readTextFile(resourcePath);
-                const resourceData = JSON.parse(resourceFileContent) as AppData;
+                
+                // 1. 리소스 경로 수정: 'public/database.json'
+                const resourcePath = await path.resolveResource(`public/${DATA_FILE_NAME}`);
 
                 if (await fs.exists(userFilePath)) {
                     const localFileContent = await fs.readTextFile(userFilePath);
@@ -115,8 +115,13 @@ const TauriApp = () => {
                         if (!localData || typeof localData !== 'object') throw new Error("Local data is not valid.");
                     } catch (e) {
                         console.error("Could not parse local data, using resource data.", e);
-                        localData = resourceData;
+                        const resourceFileContent = await fs.readTextFile(resourcePath);
+                        localData = JSON.parse(resourceFileContent) as AppData;
                     }
+
+                    const resourceFileContent = await fs.readTextFile(resourcePath);
+                    const resourceData = JSON.parse(resourceFileContent) as AppData;
+
                     if (localData.dbVersion !== resourceData.dbVersion) {
                         finalData = migrateData(localData, resourceData);
                         await fs.writeTextFile(userFilePath, JSON.stringify(finalData, null, 2));
@@ -124,8 +129,17 @@ const TauriApp = () => {
                         finalData = localData;
                     }
                 } else {
-                    finalData = resourceData;
+                    // 2. 단계별 확인 메시지 추가
+                    alert('1차 확인: AppData에 파일이 없습니다. 초기 데이터 복사를 시작합니다.');
+                    
+                    const resourceFileContent = await fs.readTextFile(resourcePath);
+                    alert(`2차 확인: 리소스 파일에서 읽어온 원본 데이터:\n${resourceFileContent}`);
+                    
+                    finalData = JSON.parse(resourceFileContent) as AppData;
                     await fs.writeTextFile(userFilePath, resourceFileContent);
+                    
+                    const newlyCreatedContent = await fs.readTextFile(userFilePath);
+                    alert(`3차 확인: 새로 생성된 파일의 내용:\n${newlyCreatedContent}`);
                 }
 
                 setInventory(sortInventory(finalData.inventory || []));
@@ -136,6 +150,11 @@ const TauriApp = () => {
                 setDbVersion(finalData.dbVersion);
             } catch (error) {
                 console.error("Tauri Data Load: Failed to initialize data:", error);
+                 if (error instanceof Error) {
+                    alert(`데이터 초기화 오류: ${error.toString()}`);
+                } else {
+                    alert(`데이터 초기화 오류: ${String(error)}`);
+                }
             } finally {
                 setIsDataLoaded(true);
             }
@@ -206,7 +225,8 @@ const TauriApp = () => {
 
     const executeReset = async () => {
         try {
-            const resourcePath = await path.resolveResource('database.json');
+            // 리소스 경로 수정
+            const resourcePath = await path.resolveResource('public/database.json');
             const fileContent = await fs.readTextFile(resourcePath);
             const data = JSON.parse(fileContent) as AppData;
             const appDataDirPath = await path.appDataDir();
@@ -219,8 +239,10 @@ const TauriApp = () => {
             setSites(data.sites || []);
             setLocations(data.locations || []);
             setDbVersion(data.dbVersion);
+            alert("데이터베이스가 초기화되었습니다.");
         } catch (error) {
             console.error("Tauri Reset: Failed to reset database:", error);
+            alert("데이터베이스 초기화에 실패했습니다.");
         }
         setShowResetConfirm(false);
         ActionLogger.log('System Database Reset');
@@ -262,7 +284,7 @@ const TauriApp = () => {
     const sortedInventory = useMemo(() => sortInventory([...inventory]), [inventory]);
 
     if (!isDataLoaded) return <LoadingFallback />;
-    if (!user) return <Login users={users} onLogin={handleLogin} isDarkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} />;
+    if (!user) return <Login users={users} onLogin={handleLogin} isDarkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} />
 
     const menuItems = [
         { id: 'DASHBOARD', label: '대시 보드', icon: LayoutDashboard },

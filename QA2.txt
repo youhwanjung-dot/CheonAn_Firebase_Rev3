@@ -1,0 +1,77 @@
+정유환 교수님, 정확한 진단입니다. **경로 불일치(resources/ vs resources/public/)**는 데이터 유실의 가장 근본적인 물리적 원인입니다.
+
+말씀하신 대로 TauriApp.tsx를 수정하여 **단계별 검증 메시지(Alert)**를 추가하면, 실행 시점에서 어느 단계의 데이터가 비어 있는지 즉시 확인할 수 있습니다.
+
+아래는 요청하신 3단계 확인 로직을 포함한 수정 코드 제안입니다.
+
+📄 단계별 검증 로직이 추가된 TauriApp.tsx 수정안
+TypeScript
+
+// ... 기존 import 생략
+const TauriApp = () => {
+    // ... 기존 state 생략
+
+    useEffect(() => {
+        const initializeData = async () => {
+            try {
+                let finalData: AppData;
+                const appDataDirPath = await path.appDataDir();
+                const userFilePath = await path.join(appDataDirPath, 'database.json');
+                
+                // [수정] 실제 경로 반영: public 폴더 구조 확인 필요
+                const resourcePath = await path.resolveResource('public/database.json'); 
+
+                if (await fs.exists(userFilePath)) {
+                    // 기존 데이터 로드 로직 (생략)
+                    const localContent = await fs.readTextFile(userFilePath);
+                    finalData = JSON.parse(localContent);
+                } else {
+                    // 1차 확인: 파일이 없어 새로 생성함을 알림
+                    alert("⚠️ 확인(1차): 로컬 데이터 파일이 없습니다. 새로 생성을 시작합니다.");
+
+                    // 원본 리소스 읽기 시도
+                    try {
+                        const resourceFileContent = await fs.readTextFile(resourcePath);
+                        
+                        // 2차 확인: 읽어온 원본 내용 출력
+                        alert(`📂 확인(2차): 원본 리소스 로드 성공!\n내용 미리보기: ${resourceFileContent.substring(0, 100)}...`);
+
+                        finalData = JSON.parse(resourceFileContent);
+
+                        // 3차 확인: 파일 생성 직전 최종 확인
+                        await fs.writeTextFile(userFilePath, resourceFileContent);
+                        const createdFileContent = await fs.readTextFile(userFilePath);
+                        alert(`✅ 확인(3차): 사용자 폴더에 파일 생성 완료.\n저장된 내용: ${createdFileContent.substring(0, 100)}...`);
+                        
+                    } catch (resError) {
+                        alert(`❌ 에러: 원본 리소스를 읽지 못했습니다.\n경로 확인 요망: ${resourcePath}`);
+                        throw resError;
+                    }
+                }
+
+                // 상태 업데이트
+                setInventory(sortInventory(finalData.inventory || []));
+                setUsers(finalData.users || []);
+                setDbVersion(finalData.dbVersion);
+                // ... 나머지 상태 생략
+
+            } catch (error) {
+                console.error("Initialization Failed:", error);
+                alert(`🚨 최종 오류 발생: ${error}`);
+            } finally {
+                setIsDataLoaded(true);
+            }
+        };
+        initializeData();
+    }, []);
+
+    // ... 나머지 로직 생략
+};
+🔍 수정 포인트 및 기대 효과7
+경로 수정: path.resolveResource('public/database.json')으로 변경하여 실제 파일 위치와 매칭시켰습니다.
+
+1차 확인 (파일 부재 알림): 앱이 사용자 폴더(AppData)를 정확히 보고 있는지, 그리고 파일이 없는 초기 상태인지를 alert으로 즉시 확인합니다.
+
+2차 확인 (리소스 읽기 검증): 리소스 경로가 맞다면 원본 JSON 텍스트가 팝업으로 뜹니다. 만약 여기서 빈 화면이 뜨거나 에러 팝업이 뜬다면 리소스 경로 설정을 다시 점검해야 합니다.
+
+3차 확인 (쓰기 작업 검증): 생성된 파일을 다시 읽어 alert으로 보여줌으로써, **"쓰기 직후에 파일이 비어버리는 현상"**이 발생하는지 물리적으로 확증합니다.
