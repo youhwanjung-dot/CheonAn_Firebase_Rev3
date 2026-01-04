@@ -397,7 +397,7 @@ const TauriApp = () => {
 
             {showLogoutConfirm && <ConfirmationModal title="로그아웃 확인" message="로그아웃 하시겠습니까?" confirmLabel="로그아웃" onConfirm={handleLogout} onCancel={() => setShowLogoutConfirm(false)} />}
             {showResetConfirm && <ConfirmationModal title="DB 초기화" message="모든 데이터(재고, 수불, 사용자)가 영구적으로 삭제됩니다. 계속하시겠습니까?" confirmLabel="초기화" isDangerous onConfirm={executeReset} onCancel={() => setShowResetConfirm(false)} />}
-            {showClearHistoryConfirm && transactionItem && <ConfirmationModal title="이력 전체 삭제" message={`'${transactionItem.name}' 품목의 모든 입출고 이력을 삭제합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`} confirmLabel="전체 삭제" isDangerous onConfirm={handleClearHistoryConfirm} onCancel={() => setShowClearHistoryConfirm(false)} />}
+            {showClearHistoryConfirm && transactionItem && <ConfirmationModal title="이력 전체 삭제" message={`'${transactionItem.name}' 품목의 모든 입출고 이력을 삭제합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`} confirmLabel="전체 삭제" isDangerous onConfirm={handleClearItemHistory} onCancel={() => setShowClearHistoryConfirm(false)} />}
             {showManual && <ManualModal onClose={() => setShowManual(false)} />}
             <div className="fixed bottom-2 right-2 text-[10px] text-slate-300 pointer-events-none z-50">v{APP_VERSION}</div>
         </div>

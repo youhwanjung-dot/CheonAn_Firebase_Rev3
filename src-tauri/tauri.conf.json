@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "cheonan-sujil-inventory",
-    "version": "3.8.1"
+    "version": "3.8.2"
   },
   "tauri": {
     "bundle": {
@@ -43,7 +43,7 @@
         "resizable": true,
         "fullscreen": false
       }
-    ],
+    },
     "security": {
       "csp": null
     }
