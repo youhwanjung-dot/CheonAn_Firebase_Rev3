@@ -108,7 +108,7 @@ const TauriApp = () => {
                 }
 
                 const userFilePath = await path.join(appDirPath, DATA_FILE_NAME);
-                const resourcePath = await path.resolveResource('database.json');
+                const resourcePath = await path.resolveResource(`public/${DATA_FILE_NAME}`);
 
                 if (await fs.exists(userFilePath)) {
                     const localFileContent = await fs.readTextFile(userFilePath);
@@ -233,7 +233,7 @@ const TauriApp = () => {
 
     const executeReset = async () => {
         try {
-            const resourcePath = await path.resolveResource('database.json');
+            const resourcePath = await path.resolveResource('public/database.json');
             const fileContent = await fs.readTextFile(resourcePath);
             const data = JSON.parse(fileContent) as AppData;
             const appDataDirPath = await path.appDataDir();
