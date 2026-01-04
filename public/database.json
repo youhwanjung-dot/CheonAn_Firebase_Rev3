@@ -1,37 +1,193 @@
 {
-  "dbVersion": "1.1",
-  "inventory": [],
-  "transactions": [],
+  "dbVersion": "1.2",
+  "inventory": [
+    {
+      "id": "ITEM-001",
+      "name": "배선용차단기",
+      "category": "전기",
+      "spec": "3P 100AF 100A",
+      "unit": "EA",
+      "currentStock": 10,
+      "optimalStock": 5,
+      "location": "전기실 창고",
+      "manufacturer": "LS"
+    },
+    {
+      "id": "ITEM-002",
+      "name": "원심탈수기 베어링",
+      "category": "기계",
+      "spec": "6210ZZ",
+      "unit": "EA",
+      "currentStock": 4,
+      "optimalStock": 4,
+      "location": "탈수동 창고",
+      "manufacturer": "FAG"
+    },
+    {
+      "id": "ITEM-003",
+      "name": "응집제(PAC)",
+      "category": "시약",
+      "spec": "액체",
+      "unit": "말",
+      "currentStock": 20,
+      "optimalStock": 10,
+      "location": "약품동 창고"
+    },
+    {
+      "id": "ITEM-004",
+      "name": "사무용 A4용지",
+      "category": "소모품",
+      "spec": "80g",
+      "unit": "BOX",
+      "currentStock": 15,
+      "optimalStock": 10,
+      "location": "관리동 1층"
+    },
+    {
+      "id": "ITEM-005",
+      "name": "PLC 모듈",
+      "category": "전기",
+      "spec": "XG-E34A",
+      "unit": "EA",
+      "currentStock": 2,
+      "optimalStock": 2,
+      "location": "전기실 창고",
+      "manufacturer": "LS"
+    },
+    {
+      "id": "ITEM-006",
+      "name": "기어박스 오일",
+      "category": "기계",
+      "spec": "VG-220",
+      "unit": "L",
+      "currentStock": 50,
+      "optimalStock": 40,
+      "location": "탈수동 창고"
+    },
+    {
+      "id": "ITEM-007",
+      "name": "잔류염소 측정 시약",
+      "category": "시약",
+      "spec": "DPD",
+      "unit": "SET",
+      "currentStock": 8,
+      "optimalStock": 5,
+      "location": "실험실"
+    },
+    {
+      "id": "ITEM-008",
+      "name": "안전모",
+      "category": "소모품",
+      "spec": "신형",
+      "unit": "EA",
+      "currentStock": 30,
+      "optimalStock": 20,
+      "location": "관리동 1층"
+    },
+    {
+      "id": "ITEM-009",
+      "name": "인버터",
+      "category": "전기",
+      "spec": "3P 220V 5.5kW",
+      "unit": "EA",
+      "currentStock": 3,
+      "optimalStock": 2,
+      "location": "전기실 창고",
+      "manufacturer": "LS"
+    },
+    {
+      "id": "ITEM-010",
+      "name": "볼밸브",
+      "category": "기계",
+      "spec": "15A",
+      "unit": "EA",
+      "currentStock": 25,
+      "optimalStock": 15,
+      "location": "탈수동 창고"
+    }
+  ],
+  "transactions": [
+     {
+      "id": "TX-001",
+      "itemId": "ITEM-001",
+      "type": "IN",
+      "quantity": 5,
+      "date": "2023-10-01",
+      "user": "관리자",
+      "site": "1단계 공정설비",
+      "currentStockSnapshot": 10
+    },
+    {
+      "id": "TX-002",
+      "itemId": "ITEM-002",
+      "type": "OUT",
+      "quantity": 1,
+      "date": "2023-10-02",
+      "user": "강석진",
+      "site": "2단계 공정설비",
+      "currentStockSnapshot": 4
+    },
+    {
+      "id": "TX-003",
+      "itemId": "ITEM-003",
+      "type": "IN",
+      "quantity": 10,
+      "date": "2023-10-03",
+      "user": "관리자",
+      "site": "약품동",
+      "currentStockSnapshot": 20
+    },
+    {
+      "id": "TX-004",
+      "itemId": "ITEM-005",
+      "type": "OUT",
+      "quantity": 1,
+      "date": "2023-10-05",
+      "user": "이용훈",
+      "site": "3단계 공정설비",
+      "currentStockSnapshot": 2
+    },
+    {
+      "id": "TX-005",
+      "itemId": "ITEM-001",
+      "type": "OUT",
+      "quantity": 2,
+      "date": "2023-10-06",
+      "user": "강석진",
+      "site": "1단계 공정설비",
+      "currentStockSnapshot": 8
+    }
+  ],
   "users": [
     {
       "id": "admin",
       "password": "1234",
       "name": "관리자",
-      "permissions": "admin"
+      "role": "admin"
     },
     {
       "id": "jyh",
       "password": "1234",
       "name": "정유환",
-      "permissions": "admin"
+      "role": "admin"
     },
     {
       "id": "ksj",
       "password": "1234",
       "name": "강석진",
-      "permissions": "user"
+      "role": "user"
     },
     {
       "id": "lyh",
       "password": "1234",
       "name": "이용훈",
-      "permissions": "user"
+      "role": "user"
     },
     {
       "id": "lsh",
       "password": "1234",
       "name": "이석호",
-      "permissions": "user"
+      "role": "user"
     }
   ],
   "sites": [
@@ -47,6 +203,7 @@
     "전기실 창고",
     "탈수동 창고",
     "분뇨동 창고",
-    "관리동 1층"
+    "관리동 1층",
+    "실험실"
   ]
 }
